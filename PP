@@ -1,0 +1,184 @@
+#PACKAGE INSTALLATION (tidyverse)
+#Install and load the tidyverse Package
+
+install.packages("tidyverse")
+
+library("tidyverse")
+
+
+#IMPORTING DATA SET (readr x dplyr)
+#Import the data sets to be used for the data exploration as one (.csv) file using the list.files function
+
+PP_data <- list.files(path = "UK_housing_prices_paid",
+                      pattern="*.csv", 
+                      full.names = T)%>% 
+  map_df(~read_csv(.))
+
+#Viewing the data sets imported
+
+head(PP_data)
+tail(PP_data)
+str(PP_data)
+glimpse(PP_data)
+
+
+#MANIPULATION OF DATA (lubridate x dplyr)
+#Changing the date format from character to date format
+
+library("lubridate")
+
+PP_data$`Date of Transfer` <- strptime(PP_data$`Date of Transfer`, format = "%m/%d/%Y")
+
+PP_data$`Date of Transfer` <- as.Date(PP_data$`Date of Transfer`, format = "%Y/%m/%d")
+
+#Filtering the data set by Price Sale which shows some price were less than 1000, this could skew the analysis 
+
+PP_data %>%
+  arrange(`Price Sale`)
+
+#Filtering the data set by Date of Transfer so that the earliest transactions comes first.
+
+PP_data %>%
+  arrange(ymd(PP_data$`Date of Transfer`))
+
+
+#DATA CLEANING (dplyr)
+#PP_data1 filters the data set by `Price Sale` data that is greater than and equals to £1000 sorted by the Date of Transfer
+
+PP_data1 <- PP_data %>%
+  arrange(ymd(PP_data$`Date of Transfer`))%>%
+  filter(`Price Sale` >= 1000)
+
+#View data to ensure it is clean for analysis
+
+head(PP_data1)
+
+
+#SUMMARY OF ANALYSIS (dplyr)
+#Clustering the data sets using the summarize function to reduce the magnitude of items to visualize before we render the visualization.
+
+#Date of Transfer (D_O_T)
+
+D_O_T <-
+  PP_data1%>%
+  arrange(ymd(PP_data1$`Date of Transfer`))%>%
+  group_by(month = lubridate::floor_date(`Date of Transfer`, "month"))%>%
+  summarize(Mean_Price_Sale = mean(`Price Sale`),
+            Standard_Deviation = sd(`Price Sale`),
+            Number_of_Sales = n())
+  
+#Property Type (P_T)
+
+P_T <-
+  PP_data1%>%
+  group_by(`Property Type`)%>%
+  summarize(Mean_Price_Sale = mean(`Price Sale`),
+            Standard_Deviation = sd(`Price Sale`),
+            Number_of_Sales = n())
+
+#Old/New (O_N)
+
+O_N <-
+  PP_data1%>%
+  group_by(`Old/New`)%>%
+  summarize(Mean_Price_Sale = mean(`Price Sale`),
+            Standard_Deviation = sd(`Price Sale`),
+            Number_of_Sales = n())
+
+#Duration (D)
+
+D <-
+  PP_data1%>%
+  group_by(Duration)%>%
+  summarize(Mean_Price_Sale = mean(`Price Sale`),
+            Standard_Deviation = sd(`Price Sale`),
+            Number_of_Sales = n())
+
+#PPD Category Type (P_C_T)
+
+P_C_T <-
+ PP_data1%>%
+  group_by(`PPD Category Type`)%>%
+  summarize(Mean_Price_Sale = mean(`Price Sale`),
+            Standard_Deviation = sd(`Price Sale`),
+            Number_of_Sales = n())
+
+#Location (L)
+
+L <-
+  PP_data1%>%
+  group_by(County)%>%
+  summarize(Mean_Price_Sale = mean(`Price Sale`),
+            Standard_Deviation = sd(`Price Sale`),
+            Number_of_Sales = n())
+
+
+#DATA VISUALIZATION (ggplot2)
+#Visualize the Data to communicate results
+
+#Date of Transfer (D_O_T)
+
+ggplot(data = D_O_T,
+       mapping = aes(x = `month`, y = `Number_of_Sales`)) +
+  geom_line(stat='identity', color="red") +
+  labs(x = "Date", y = "Number of Sales",
+       title = "Number of Sales Per Month (2018 - 2021)") +
+  theme_bw()
+
+ggplot(data = D_O_T,
+       mapping = aes(x = `month`, y = `Mean_Price_Sale`, 
+                     fill = `Mean_Price_Sale`)) +
+  geom_bar(stat='identity', color="white") +
+  labs(x = "Date", y = "Average Sales",
+       title = "Average Sales Per Month (2018 - 2021)") +
+  theme_bw() +
+  theme(legend.position="none")
+
+
+#Property Type (P_T)
+
+ggplot(data = P_T,
+       mapping = aes(x = "", y = `Number_of_Sales`, fill = `Property Type`)) +
+  geom_bar(stat = "identity", color="black")+
+  coord_polar("y", start=0) +
+  labs(title = "Number of Sales Per Property type (2018 - 2021)")+
+  theme_void()+
+  theme(legend.position="none") +
+  geom_text(mapping = aes(y = `Number_of_Sales`, label = `Property Type`), 
+            color = "white",
+            size =6,
+            stat = "identity",
+            position = position_stack(vjust = 0.5)) +
+  scale_fill_brewer(palette="Set1")
+
+ggplot(data = P_T,
+       mapping = aes(x = `Property Type`, y = `Mean_Price_Sale`,
+                     fill = `Property Type`)) +
+  geom_histogram(stat = "identity", color = "black") +
+  labs(x = " Property Type", y = "Average Price per sale",
+       title = "Average Sale Per Property Type (2018 - 2021)") +
+  theme_classic() +
+  scale_fill_brewer(palette="Set1")
+
+#Location (L)
+
+install.packages("ggwordcloud")
+library(ggwordcloud)
+
+ggplot(data = `L` , 
+       mapping = aes(label = `County`, size = `Mean_Price_Sale`,
+                     color = factor(sample.int(10, nrow(`L`), replace = TRUE)))) +
+  geom_text_wordcloud(stat = "identity", area_corr_power = 1) +
+  labs(title = "Average Sale by Counties (2018 - 2021)") +
+  scale_size_area(max_size = 5) +
+  theme_bw() +
+  scale_fill_brewer(palette="Set1")
+
+
+save(D, D_O_T, L,
+     O_N, P_C_T, P_T,
+     PP_data, PP_data1, file = 'PP.RData')
+load("~/PP.RData")
+
+install.packages("DT")
+library("DT")
